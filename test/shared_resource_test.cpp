@@ -9,44 +9,44 @@ public:
 
 	class ExclusiveLock {
 	public:
-		ExclusiveLock(boost::shared_mutex* mutex)
-				: mutex_{mutex} {
+		ExclusiveLock(SharedResource<_ResourceType, _ABORT_ON_TIMEOUT>* parent)
+				: parent_{parent} {
 			if (ABORT_ON_TIMEOUT) {
-				bool ok = mutex_->try_lock_for(boost::chrono::milliseconds{100});
+				bool ok = parent_->mutex_.try_lock_for(boost::chrono::milliseconds{100});
 				if (!ok) {
 					::abort();
 				}
 			} else {
-				mutex_->lock();
+				parent_->mutex_.lock();
 			}
 		}
 		~ExclusiveLock() {
-			mutex_->unlock();
+			parent_->mutex_.unlock();
 		}
 
 	private:
-		boost::shared_mutex* mutex_;
+		SharedResource<_ResourceType, _ABORT_ON_TIMEOUT>* parent_;
 	};
 
 	class SharedLock {
 	public:
-		SharedLock(boost::shared_mutex* mutex)
-				: mutex_{mutex} {
+		SharedLock(SharedResource<_ResourceType, _ABORT_ON_TIMEOUT>* parent)
+				: parent_{parent} {
 			if (ABORT_ON_TIMEOUT) {
-				bool ok = mutex_->try_lock_shared_for(boost::chrono::seconds{1});
+				bool ok = parent_->mutex_.try_lock_shared_for(boost::chrono::seconds{1});
 				if (!ok) {
 					::abort();
 				}
 			} else {
-				mutex_->lock_shared();
+				parent_->mutex_.lock_shared();
 			}
 		}
 		~SharedLock() {
-			mutex_->unlock_shared();
+			parent_->mutex_.unlock_shared();
 		}
 
 	private:
-		boost::shared_mutex* mutex_;
+		SharedResource<_ResourceType, _ABORT_ON_TIMEOUT>* parent_;
 	};
 
 	template <typename... Args>
@@ -55,11 +55,11 @@ public:
 	}
 
 	SharedLock sharedLock() {
-		return SharedLock{&mutex_};
+		return SharedLock{this};
 	}
 
 	ExclusiveLock exclusiveLock() {
-		return ExclusiveLock{&mutex_};
+		return ExclusiveLock{this};
 	}
 
 	SharedResource() = default;
