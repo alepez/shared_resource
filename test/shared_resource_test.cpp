@@ -2,24 +2,35 @@
 #include <gtest/gtest.h>
 #include <memory>
 
-template <typename T> class SharedResource {
+template <typename _ResourceType, bool _ABORT_ON_TIMEOUT> class SharedResource {
 public:
-	using ResourceType = T;
+	using ResourceType = _ResourceType;
+	static constexpr int ABORT_ON_TIMEOUT = _ABORT_ON_TIMEOUT;
 
 	class ExclusiveLock {
+	public:
 		ExclusiveLock(boost::shared_mutex* mutex)
 				: mutex_{mutex} {
-			mutex_->lock();
+			if (ABORT_ON_TIMEOUT) {
+				bool ok = mutex_->try_lock_for(boost::chrono::seconds{1});
+				if (!ok) {
+					::abort();
+				}
+			} else {
+				mutex_->lock();
+			}
 		}
 		~ExclusiveLock() {
 			mutex_->unlock();
 		}
+
+	private:
 		boost::shared_mutex* mutex_;
 	};
 
 	template <typename... Args>
 	SharedResource(Args&&... args)
-			: resource_{new T(std::forward<Args>(args)...)} {
+			: resource_{new ResourceType(std::forward<Args>(args)...)} {
 	}
 
 	ExclusiveLock exclusiveLock() {
@@ -30,18 +41,30 @@ public:
 	SharedResource& operator=(SharedResource&&) = default;
 
 private:
-	std::unique_ptr<T> resource_;
+	std::unique_ptr<ResourceType> resource_;
 	boost::shared_mutex mutex_;
 };
 
 TEST(SharedResourceTest, InitAsInt) {
-	SharedResource<int> that;
+	SharedResource<int, false> that;
 }
 
 TEST(SharedResourceTest, InitAsString) {
-	SharedResource<std::string> that;
+	SharedResource<std::string, false> that;
 }
 
 TEST(SharedResourceTest, InitWithArgs) {
-	SharedResource<std::string> that("ciao");
+	SharedResource<std::string, false> that("ciao");
+}
+
+TEST(SharedResourceTest, ExclusiveLockAbortIfCannotGetLock) {
+	SharedResource<std::string, true> that("ciao");
+	auto res = that.exclusiveLock();
+	ASSERT_DEATH(that.exclusiveLock(), ".*");
+}
+
+TEST(SharedResourceTest, ExclusiveLockReleaseWhenOutOfScope) {
+	SharedResource<std::string, true> that("ciao");
+	{ auto res = that.exclusiveLock(); }
+	{ auto res = that.exclusiveLock(); }
 }
