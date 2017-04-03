@@ -24,6 +24,10 @@ public:
 			parent_->mutex_.unlock();
 		}
 
+		ResourceType* operator->() {
+			return parent_->resource.get();
+		}
+
 	private:
 		SharedResource<_ResourceType, _ABORT_ON_TIMEOUT>* parent_;
 	};
@@ -41,8 +45,13 @@ public:
 				parent_->mutex_.lock_shared();
 			}
 		}
+
 		~SharedLock() {
 			parent_->mutex_.unlock_shared();
+		}
+
+		ResourceType* operator->() {
+			return parent_->resource_.get();
 		}
 
 	private:
@@ -112,4 +121,10 @@ TEST(SharedResourceTest, SharedLockMultipleIsOk) {
 	auto res1 = that.sharedLock();
 	auto res2 = that.sharedLock();
 	auto res3 = that.sharedLock();
+}
+
+TEST(SharedResourceTest, ArrowOperator) {
+	SharedResource<std::string, true> that("ciao");
+	auto res = that.sharedLock();
+	std::string copy{res->c_str()};
 }
