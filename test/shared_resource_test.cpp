@@ -12,7 +12,7 @@ public:
 		ExclusiveLock(boost::shared_mutex* mutex)
 				: mutex_{mutex} {
 			if (ABORT_ON_TIMEOUT) {
-				bool ok = mutex_->try_lock_for(boost::chrono::seconds{1});
+				bool ok = mutex_->try_lock_for(boost::chrono::milliseconds{100});
 				if (!ok) {
 					::abort();
 				}
@@ -28,9 +28,34 @@ public:
 		boost::shared_mutex* mutex_;
 	};
 
+	class SharedLock {
+	public:
+		SharedLock(boost::shared_mutex* mutex)
+				: mutex_{mutex} {
+			if (ABORT_ON_TIMEOUT) {
+				bool ok = mutex_->try_lock_shared_for(boost::chrono::seconds{1});
+				if (!ok) {
+					::abort();
+				}
+			} else {
+				mutex_->lock_shared();
+			}
+		}
+		~SharedLock() {
+			mutex_->unlock_shared();
+		}
+
+	private:
+		boost::shared_mutex* mutex_;
+	};
+
 	template <typename... Args>
 	SharedResource(Args&&... args)
 			: resource_{new ResourceType(std::forward<Args>(args)...)} {
+	}
+
+	SharedLock sharedLock() {
+		return SharedLock{&mutex_};
 	}
 
 	ExclusiveLock exclusiveLock() {
@@ -67,4 +92,24 @@ TEST(SharedResourceTest, ExclusiveLockReleaseWhenOutOfScope) {
 	SharedResource<std::string, true> that("ciao");
 	{ auto res = that.exclusiveLock(); }
 	{ auto res = that.exclusiveLock(); }
+}
+
+TEST(SharedResourceTest, SharedLockReleaseWhenOutOfScope) {
+	SharedResource<std::string, true> that("ciao");
+	{ auto res = that.sharedLock(); }
+	{ auto res = that.exclusiveLock(); }
+}
+
+TEST(SharedResourceTest, SharedLockAbortIfCannotGetLock) {
+	SharedResource<std::string, true> that("ciao");
+	auto res = that.exclusiveLock();
+	ASSERT_DEATH(that.sharedLock(), ".*");
+}
+
+TEST(SharedResourceTest, SharedLockMultipleIsOk) {
+	SharedResource<std::string, true> that("ciao");
+	auto res0 = that.sharedLock();
+	auto res1 = that.sharedLock();
+	auto res2 = that.sharedLock();
+	auto res3 = that.sharedLock();
 }
