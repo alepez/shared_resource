@@ -25,7 +25,11 @@ public:
 		}
 
 		ResourceType* operator->() {
-			return parent_->resource.get();
+			return parent_->resource_.get();
+		}
+
+		ResourceType& operator*() {
+			return *parent_->resource_;
 		}
 
 	private:
@@ -52,6 +56,10 @@ public:
 
 		ResourceType* operator->() {
 			return parent_->resource_.get();
+		}
+
+		ResourceType& operator*() {
+			return *parent_->resource_;
 		}
 
 	private:
@@ -125,6 +133,32 @@ TEST(SharedResourceTest, SharedLockMultipleIsOk) {
 
 TEST(SharedResourceTest, ArrowOperator) {
 	SharedResource<std::string, true> that("ciao");
-	auto res = that.sharedLock();
-	std::string copy{res->c_str()};
+	auto res1 = that.sharedLock();
+	auto res2 = that.sharedLock();
+	std::string copy1{res1->c_str()};
+	std::string copy2{res2->c_str()};
+	ASSERT_EQ(copy1, copy2);
+}
+
+TEST(SharedResourceTest, ExclusiveLockArrowOperator) {
+	SharedResource<std::string, true> that("ciao");
+	auto res1 = that.sharedLock();
+	std::string copy1{res1->c_str()};
+	ASSERT_EQ(copy1, "ciao");
+}
+
+TEST(SharedResourceTest, DereferenceOperator) {
+	SharedResource<std::string, true> that("ciao");
+	auto res1 = that.sharedLock();
+	auto res2 = that.sharedLock();
+	std::string copy1 = *res1;
+	std::string copy2 = *res2;
+	ASSERT_EQ(copy1, copy2);
+}
+
+TEST(SharedResourceTest, ExclusiveLockDereferenceOperator) {
+	SharedResource<std::string, true> that("ciao");
+	auto res1 = that.exclusiveLock();
+	std::string copy1 = *res1;
+	ASSERT_EQ(copy1, "ciao");
 }
